@@ -15,7 +15,7 @@ func main() {
 	var timeout = flag.Int("timeout", 300, "Time in milliseconds for timeout")
 	flag.Parse()
 
-	log.Printf("Connecting to server: %s with timeout: %d", *server, *timeout)
+	log.Printf("Connecting to server: %s with timeout: %dms", *server, *timeout)
 
 	addresses, err := resolveAddress(*server)
 	if err != nil {

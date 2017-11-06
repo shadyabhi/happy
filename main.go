@@ -10,7 +10,6 @@ import (
 )
 
 func main() {
-	// Commandline flags
 	var server = flag.String("server", "linkedin.com:443", "Server to query for")
 	var timeout = flag.Int("timeout", 300, "Time in milliseconds for timeout")
 	flag.Parse()

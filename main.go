@@ -22,10 +22,17 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
+	// connectAddress returns "ip" to signal which one was connected first
+	// size handles return from both v4 and v6 goroutine
+	result := make(chan net.IP, 2)
+
 	for _, addr := range addresses {
 		wg.Add(1)
-		go connectAddress(addr, *timeout, &wg)
+		go connectAddress(addr, *timeout, result, &wg)
 	}
+	wg.Add(1)
+	go whoWon(result, &wg)
+
 	wg.Wait()
 
 }
@@ -42,7 +49,7 @@ func resolveAddress(server string) (addresses [2]*net.TCPAddr, err error) {
 	return addresses, nil
 }
 
-func connectAddress(addr *net.TCPAddr, timeout int, wg *sync.WaitGroup) error {
+func connectAddress(addr *net.TCPAddr, timeout int, result chan net.IP, wg *sync.WaitGroup) error {
 	start := time.Now()
 	d := net.Dialer{Timeout: time.Duration(timeout) * time.Millisecond}
 	conn, err := d.Dial("tcp", addr.String())
@@ -50,10 +57,24 @@ func connectAddress(addr *net.TCPAddr, timeout int, wg *sync.WaitGroup) error {
 		log.Printf("Dial failed for address: %s, err: %s", addr.String(), err.Error())
 		wg.Done()
 		return err
+	} else {
+		result <- addr.IP
 	}
+
 	elasped := time.Since(start)
 	log.Printf("Connected to address: %s in %dms", addr.String(), elasped.Nanoseconds()/1000000)
 	conn.Close()
 	wg.Done()
+
 	return nil
+}
+
+func whoWon(result chan net.IP, wg *sync.WaitGroup) {
+	r := <-result
+	if r.To4() == nil {
+		log.Printf("IPv6 won!")
+	} else {
+		log.Printf("IPv4 won!")
+	}
+	wg.Done()
 }

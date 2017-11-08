@@ -9,6 +9,11 @@ import (
 	"time"
 )
 
+type response struct {
+	ip   net.IP
+	time int64
+}
+
 func main() {
 	var server = flag.String("server", "linkedin.com:443", "Server to query for")
 	var timeout = flag.Int("timeout", 300, "Time in milliseconds for timeout")
@@ -21,20 +26,19 @@ func main() {
 		log.Fatalf("Error resolving addresses: %s", err)
 	}
 
-	var wg sync.WaitGroup
+	var wgConnect sync.WaitGroup
 	// connectAddress returns "ip" to signal which one was connected first
 	// size handles return from both v4 and v6 goroutine
-	result := make(chan net.IP, 2)
+	results := make(chan response, 2)
 
 	for _, addr := range addresses {
-		wg.Add(1)
-		go connectAddress(addr, *timeout, result, &wg)
+		wgConnect.Add(1)
+		go connectAddress(addr, *timeout, results, &wgConnect)
 	}
-	wg.Add(1)
-	go whoWon(result, &wg)
+	wgConnect.Wait()
+	close(results)
 
-	wg.Wait()
-
+	whoWon(results, timeout)
 }
 
 func resolveAddress(server string) (addresses [2]*net.TCPAddr, err error) {
@@ -49,7 +53,7 @@ func resolveAddress(server string) (addresses [2]*net.TCPAddr, err error) {
 	return addresses, nil
 }
 
-func connectAddress(addr *net.TCPAddr, timeout int, result chan net.IP, wg *sync.WaitGroup) error {
+func connectAddress(addr *net.TCPAddr, timeout int, results chan response, wg *sync.WaitGroup) error {
 	start := time.Now()
 	d := net.Dialer{Timeout: time.Duration(timeout) * time.Millisecond}
 	conn, err := d.Dial("tcp", addr.String())
@@ -57,11 +61,10 @@ func connectAddress(addr *net.TCPAddr, timeout int, result chan net.IP, wg *sync
 		log.Printf("Dial failed for address: %s, err: %s", addr.String(), err.Error())
 		wg.Done()
 		return err
-	} else {
-		result <- addr.IP
 	}
 
 	elasped := time.Since(start)
+	results <- response{ip: addr.IP, time: elasped.Nanoseconds() / 1000000}
 	log.Printf("Connected to address: %s in %dms", addr.String(), elasped.Nanoseconds()/1000000)
 	conn.Close()
 	wg.Done()
@@ -69,12 +72,32 @@ func connectAddress(addr *net.TCPAddr, timeout int, result chan net.IP, wg *sync
 	return nil
 }
 
-func whoWon(result chan net.IP, wg *sync.WaitGroup) {
-	r := <-result
-	if r.To4() == nil {
-		log.Printf("IPv6 won!")
-	} else {
-		log.Printf("IPv4 won!")
+func whoWon(results chan response, timeout *int) {
+	n := len(results)
+	r := <-results
+
+	if r.time > int64(*timeout) {
+		if r.ip.To4() == nil {
+			log.Printf("As per happy eyeballs, IPv6 won!")
+		} else {
+			log.Printf("As per happy eyeballs, IPv4 won!")
+		}
 	}
-	wg.Done()
+	if r.time < int64(*timeout) && r.ip.To4() != nil {
+		// v4 returned before v6
+		if n == 1 {
+			log.Printf("As per happy eyeballs, IPv4 won!")
+		}
+
+		if n == 2 {
+			v6 := <-results
+			if v6.time < int64(*timeout) {
+				log.Printf("As per happy eyeballs, IPv6 won!")
+			} else {
+				log.Printf("As per happy eyeballs, IPv4 won!")
+			}
+		}
+	} else {
+		log.Printf("As per happy eyeballs, IPv6 won!")
+	}
 }

@@ -7,7 +7,7 @@ A small program to analyze who wins the race between ipv4 and ipv6.
 	➜ $?=0 @arastogi-mn3 /Users/arastogi [ 7:37AM] ➤ go get -u github.com/shadyabhi/happy
 
 	>>>  2s elasped...
-	➜ $?=0 @arastogi-mn3 golang/happy [ 7:37AM] (master|…)➤
+	➜ $?=0 @arastogi-mn3 /Users/arastogi [ 7:37AM] ➤
 
 ## Usage
 
